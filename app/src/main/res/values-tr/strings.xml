@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Dart At</string>
+    <string name="admob_app_id">ca-app-pub-6199570395675233~8559250512</string>
+    <string name="rewarded_ad_unit_id">ca-app-pub-6199570395675233/3770415113</string>
+</resources>
