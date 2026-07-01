@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -70,8 +71,15 @@ public class CropImageActivity extends Activity {
         );
         actionParams.gravity = android.view.Gravity.BOTTOM;
         root.addView(actions, actionParams);
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            int bottomInset = insets.getSystemWindowInsetBottom();
+            actions.setPadding(dp(16), dp(10), dp(16), dp(16) + bottomInset);
+            cropView.setBottomReservedSpace(dp(96) + bottomInset);
+            return insets;
+        });
 
         setContentView(root);
+        root.requestApplyInsets();
     }
 
     private Bitmap decodeBitmap(Uri sourceUri) {
@@ -138,23 +146,32 @@ public class CropImageActivity extends Activity {
         private float lastX;
         private float lastY;
         private float lastDistance;
+        private float bottomReservedSpace;
         private boolean initialized;
 
         CropView(Activity activity, Bitmap bitmap) {
             super(activity);
             this.bitmap = bitmap;
+            bottomReservedSpace = activity.getResources().getDisplayMetrics().density * 96f;
             overlayPaint.setColor(Color.argb(150, 0, 0, 0));
             borderPaint.setColor(Color.WHITE);
             borderPaint.setStyle(Paint.Style.STROKE);
             borderPaint.setStrokeWidth(activity.getResources().getDisplayMetrics().density * 2.5f);
         }
 
+        void setBottomReservedSpace(float bottomReservedSpace) {
+            this.bottomReservedSpace = bottomReservedSpace;
+            if (getWidth() > 0 && getHeight() > 0) {
+                updateCropRect(getWidth(), getHeight());
+                constrainImage();
+                invalidate();
+            }
+        }
+
         @Override
         protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
             super.onSizeChanged(width, height, oldWidth, oldHeight);
-            float actionSpace = getResources().getDisplayMetrics().density * 96f;
-            float size = Math.min(width * 0.82f, Math.max(1f, height - actionSpace) * 0.62f);
-            cropRect.set((width - size) / 2f, (height - actionSpace - size) / 2f, (width + size) / 2f, (height - actionSpace + size) / 2f);
+            updateCropRect(width, height);
             if (!initialized) {
                 scale = Math.max(cropRect.width() / bitmap.getWidth(), cropRect.height() / bitmap.getHeight());
                 offsetX = cropRect.centerX() - (bitmap.getWidth() * scale) / 2f;
@@ -162,6 +179,12 @@ public class CropImageActivity extends Activity {
                 initialized = true;
             }
             constrainImage();
+        }
+
+        private void updateCropRect(int width, int height) {
+            float usableHeight = Math.max(1f, height - bottomReservedSpace);
+            float size = Math.min(width * 0.82f, usableHeight * 0.62f);
+            cropRect.set((width - size) / 2f, (usableHeight - size) / 2f, (width + size) / 2f, (usableHeight + size) / 2f);
         }
 
         @Override

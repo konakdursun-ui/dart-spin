@@ -42,7 +42,8 @@ public class PinGameView extends View {
     private static final float SHOOT_SPEED_DP = 1080f;
     private static final float IMPACT_ANGLE_DEG = 90f;
     private static final int INITIAL_PIN_COUNT = 5;
-    private static final int SHOTS_PER_LEVEL = 5;
+    private static final int INITIAL_SHOTS_PER_LEVEL = 5;
+    private static final int LEVELS_PER_SHOT_INCREMENT = 10;
     private static final boolean TEST_UNLOCK_ALL_LEVELS = true;
 
     private final Paint backgroundPaint = new Paint();
@@ -1536,9 +1537,13 @@ public class PinGameView extends View {
             float speed = 40f + ((i - 1) * 0.26f);
             int clearBonus = 12 + (i * 3);
             int coinReward = 3;
-            configs.add(new LevelConfig(i, SHOTS_PER_LEVEL, speed, clearBonus, coinReward, generateAngles(INITIAL_PIN_COUNT, i)));
+            configs.add(new LevelConfig(i, shotsForLevel(i), speed, clearBonus, coinReward, generateAngles(INITIAL_PIN_COUNT, i)));
         }
         return configs;
+    }
+
+    private int shotsForLevel(int levelNumber) {
+        return INITIAL_SHOTS_PER_LEVEL + Math.max(0, (levelNumber - 1) / LEVELS_PER_SHOT_INCREMENT);
     }
 
     private float[] generateAngles(int count, int seed) {
