@@ -96,6 +96,10 @@ public class PinGameView extends View {
     private final CustomTargetImageGateway customTargetImageGateway;
 
     private float shootSpeedPx;
+    private float skinScrollY;
+    private float coreScrollY;
+    private float lastTouchY;
+    private boolean draggingSelectionList;
 
     private int levelIndex;
     private int selectedStartLevel;
@@ -255,12 +259,56 @@ public class PinGameView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_MOVE && (screenMode == ScreenMode.SKINS || screenMode == ScreenMode.CORES)) {
+            float deltaY = event.getY() - lastTouchY;
+            lastTouchY = event.getY();
+            if (Math.abs(deltaY) > dp(1f)) {
+                draggingSelectionList = true;
+            }
+            if (screenMode == ScreenMode.SKINS) {
+                skinScrollY = clampSelectionScroll(skinScrollY - deltaY, skins.size());
+            } else {
+                coreScrollY = clampSelectionScroll(coreScrollY - deltaY, coreStyles.size());
+            }
+            invalidate();
+            return true;
+        }
+
+        if (event.getAction() == MotionEvent.ACTION_UP && (screenMode == ScreenMode.SKINS || screenMode == ScreenMode.CORES)) {
+            if (!draggingSelectionList) {
+                float x = event.getX() - shakeOffsetX;
+                float y = event.getY();
+                if (backButtonRect.contains(x, y)) {
+                    screenMode = previousScreenMode;
+                } else if (screenMode == ScreenMode.SKINS) {
+                    handleSkinTap(x, y);
+                } else {
+                    handleCoreTap(x, y);
+                }
+                invalidate();
+            }
+            draggingSelectionList = false;
+            return true;
+        }
+
+        if (event.getAction() == MotionEvent.ACTION_CANCEL && draggingSelectionList) {
+            draggingSelectionList = false;
+            return true;
+        }
+
         if (event.getAction() != MotionEvent.ACTION_DOWN) {
             return true;
         }
 
+        lastTouchY = event.getY();
+        draggingSelectionList = false;
+
         float x = event.getX() - shakeOffsetX;
         float y = event.getY();
+
+        if (screenMode == ScreenMode.SKINS || screenMode == ScreenMode.CORES) {
+            return true;
+        }
 
         if (screenMode == ScreenMode.MENU) {
             if (primaryButtonRect.contains(x, y)) {
@@ -586,7 +634,8 @@ public class PinGameView extends View {
         setButtonRect(backButtonRect, centerX, bottom - dp(46f), dp(170f), dp(44f));
         drawGhostButton(canvas, backButtonRect, t("back"));
 
-        drawSkinCards(canvas, left + dp(18f), top + dp(114f), width - dp(36f));
+        RectF listClip = new RectF(left + dp(18f), top + dp(104f), left + width - dp(18f), bottom - dp(92f));
+        drawSkinCards(canvas, listClip.left, listClip.top, listClip.width(), listClip);
     }
 
     private void drawCoreSelection(Canvas canvas) {
@@ -604,7 +653,8 @@ public class PinGameView extends View {
         setButtonRect(backButtonRect, centerX, bottom - dp(46f), dp(170f), dp(44f));
         drawGhostButton(canvas, backButtonRect, t("back"));
 
-        drawCoreCards(canvas, left + dp(18f), top + dp(114f), width - dp(36f));
+        RectF listClip = new RectF(left + dp(18f), top + dp(104f), left + width - dp(18f), bottom - dp(92f));
+        drawCoreCards(canvas, listClip.left, listClip.top, listClip.width(), listClip);
     }
 
     private void drawSettings(Canvas canvas) {
@@ -749,6 +799,11 @@ public class PinGameView extends View {
         canvas.save();
         canvas.translate(x, y);
         canvas.rotate(angleDeg + 90f);
+        Paint detailPaint = new Paint(pinPaint);
+        Paint accentPaint = new Paint(pinPaint);
+        accentPaint.setColor(Color.rgb(214, 95, 54));
+        Paint lightPaint = new Paint(pinPaint);
+        lightPaint.setColor(Color.rgb(245, 238, 220));
         if ("arrow".equals(skin.id)) {
             Path arrow = new Path();
             arrow.moveTo(0f, -radius * 1.6f);
@@ -760,6 +815,65 @@ public class PinGameView extends View {
             arrow.lineTo(-radius * 0.55f, radius * 0.4f);
             arrow.close();
             canvas.drawPath(arrow, pinPaint);
+        } else if ("laser".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(45, 220, 255));
+            canvas.drawRoundRect(new RectF(-radius * 0.18f, -radius * 1.75f, radius * 0.18f, radius * 1.45f), radius * 0.18f, radius * 0.18f, detailPaint);
+            canvas.drawCircle(0f, -radius * 1.78f, radius * 0.42f, detailPaint);
+        } else if ("rocket".equals(skin.id)) {
+            Path rocket = new Path();
+            rocket.moveTo(0f, -radius * 1.9f);
+            rocket.lineTo(radius * 0.55f, -radius * 0.45f);
+            rocket.lineTo(radius * 0.34f, radius * 1.05f);
+            rocket.lineTo(0f, radius * 1.35f);
+            rocket.lineTo(-radius * 0.34f, radius * 1.05f);
+            rocket.lineTo(-radius * 0.55f, -radius * 0.45f);
+            rocket.close();
+            canvas.drawPath(rocket, accentPaint);
+            canvas.drawCircle(0f, -radius * 0.55f, radius * 0.22f, lightPaint);
+        } else if ("pencil".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(236, 190, 63));
+            canvas.drawRect(-radius * 0.26f, -radius * 1.1f, radius * 0.26f, radius * 1.45f, detailPaint);
+            Path tip = new Path();
+            tip.moveTo(0f, -radius * 1.8f);
+            tip.lineTo(radius * 0.34f, -radius * 1.1f);
+            tip.lineTo(-radius * 0.34f, -radius * 1.1f);
+            tip.close();
+            canvas.drawPath(tip, pinPaint);
+        } else if ("lightning".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(246, 201, 50));
+            Path bolt = new Path();
+            bolt.moveTo(radius * 0.15f, -radius * 1.8f);
+            bolt.lineTo(-radius * 0.45f, -radius * 0.1f);
+            bolt.lineTo(radius * 0.05f, -radius * 0.1f);
+            bolt.lineTo(-radius * 0.18f, radius * 1.55f);
+            bolt.lineTo(radius * 0.55f, -radius * 0.35f);
+            bolt.lineTo(radius * 0.08f, -radius * 0.35f);
+            bolt.close();
+            canvas.drawPath(bolt, detailPaint);
+        } else if ("nail".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(92, 103, 112));
+            canvas.drawRoundRect(new RectF(-radius * 0.16f, -radius * 1.6f, radius * 0.16f, radius * 1.55f), radius * 0.12f, radius * 0.12f, detailPaint);
+            canvas.drawOval(new RectF(-radius * 0.58f, -radius * 1.75f, radius * 0.58f, -radius * 1.32f), detailPaint);
+        } else if ("feather".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(88, 149, 184));
+            Path feather = new Path();
+            feather.moveTo(0f, -radius * 1.75f);
+            feather.cubicTo(radius * 0.8f, -radius * 1.25f, radius * 0.65f, radius * 0.65f, 0f, radius * 1.55f);
+            feather.cubicTo(-radius * 0.65f, radius * 0.65f, -radius * 0.8f, -radius * 1.25f, 0f, -radius * 1.75f);
+            canvas.drawPath(feather, detailPaint);
+            linePaint.setColor(Color.argb(210, 245, 245, 245));
+            canvas.drawLine(0f, -radius * 1.35f, 0f, radius * 1.3f, linePaint);
+            linePaint.setColor(Color.argb(190, 48, 58, 71));
+        } else if ("crystal".equals(skin.id)) {
+            detailPaint.setColor(Color.rgb(116, 213, 232));
+            Path crystal = new Path();
+            crystal.moveTo(0f, -radius * 1.85f);
+            crystal.lineTo(radius * 0.56f, -radius * 0.25f);
+            crystal.lineTo(radius * 0.28f, radius * 1.45f);
+            crystal.lineTo(-radius * 0.28f, radius * 1.45f);
+            crystal.lineTo(-radius * 0.56f, -radius * 0.25f);
+            crystal.close();
+            canvas.drawPath(crystal, detailPaint);
         } else if ("sword".equals(skin.id)) {
             Path sword = new Path();
             sword.moveTo(0f, -radius * 1.8f);
@@ -825,6 +939,20 @@ public class PinGameView extends View {
             drawTennisCore(canvas, centerX, centerY, hubRadius);
         } else if ("baseball".equals(coreStyle.id)) {
             drawBaseballCore(canvas, centerX, centerY, hubRadius);
+        } else if ("billiard".equals(coreStyle.id)) {
+            drawBilliardCore(canvas, centerX, centerY, hubRadius);
+        } else if ("planet".equals(coreStyle.id)) {
+            drawPlanetCore(canvas, centerX, centerY, hubRadius);
+        } else if ("shield".equals(coreStyle.id)) {
+            drawShieldCore(canvas, centerX, centerY, hubRadius);
+        } else if ("smile".equals(coreStyle.id)) {
+            drawSmileCore(canvas, centerX, centerY, hubRadius);
+        } else if ("neon".equals(coreStyle.id)) {
+            drawNeonCore(canvas, centerX, centerY, hubRadius);
+        } else if ("clock".equals(coreStyle.id)) {
+            drawClockCore(canvas, centerX, centerY, hubRadius);
+        } else if ("gem".equals(coreStyle.id)) {
+            drawGemCore(canvas, centerX, centerY, hubRadius);
         } else {
             drawClassicCore(canvas, centerX, centerY, hubRadius);
         }
@@ -841,7 +969,7 @@ public class PinGameView extends View {
 
         Paint levelText = new Paint(labelPaint);
         levelText.setTextSize(sp(22f));
-        levelText.setColor("tennis".equals(coreStyle.id) || "baseball".equals(coreStyle.id) ? Color.BLACK : Color.WHITE);
+        levelText.setColor(getLevelTextColor(coreStyle.id));
         if ("custom".equals(coreStyle.id) && customTargetBitmap != null) {
             levelText.setShadowLayer(dp(3f), 0f, dp(1f), Color.argb(180, 0, 0, 0));
         }
@@ -885,13 +1013,18 @@ public class PinGameView extends View {
         white.setColor(Color.WHITE);
         Paint black = new Paint(Paint.ANTI_ALIAS_FLAG);
         black.setColor(Color.BLACK);
+        Paint seam = new Paint(Paint.ANTI_ALIAS_FLAG);
+        seam.setColor(Color.rgb(35, 35, 35));
+        seam.setStyle(Paint.Style.STROKE);
+        seam.setStrokeWidth(Math.max(1f, hubRadius * 0.055f));
         canvas.drawCircle(centerX, centerY, hubRadius, white);
-        canvas.drawCircle(centerX, centerY, hubRadius * 0.26f, black);
+        drawPentagon(canvas, centerX, centerY, hubRadius * 0.28f, -90f, black);
         for (int i = 0; i < 5; i++) {
             double angle = Math.toRadians((360d / 5d) * i - 90d);
             float px = centerX + (float) Math.cos(angle) * hubRadius * 0.58f;
             float py = centerY + (float) Math.sin(angle) * hubRadius * 0.58f;
-            canvas.drawCircle(px, py, hubRadius * 0.15f, black);
+            drawPentagon(canvas, px, py, hubRadius * 0.18f, (i * 72f) - 18f, black);
+            canvas.drawLine(centerX, centerY, px, py, seam);
         }
     }
 
@@ -901,13 +1034,17 @@ public class PinGameView extends View {
         Paint seam = new Paint(Paint.ANTI_ALIAS_FLAG);
         seam.setColor(Color.BLACK);
         seam.setStyle(Paint.Style.STROKE);
-        seam.setStrokeWidth(dp(2.3f));
+        seam.setStrokeWidth(Math.max(1f, hubRadius * 0.08f));
         canvas.drawCircle(centerX, centerY, hubRadius, orange);
         canvas.drawLine(centerX - hubRadius, centerY, centerX + hubRadius, centerY, seam);
         canvas.drawLine(centerX, centerY - hubRadius, centerX, centerY + hubRadius, seam);
         RectF oval = new RectF(centerX - hubRadius * 0.82f, centerY - hubRadius, centerX + hubRadius * 0.82f, centerY + hubRadius);
         canvas.drawArc(oval, -70f, 140f, false, seam);
         canvas.drawArc(oval, 110f, 140f, false, seam);
+        RectF side = new RectF(centerX - hubRadius * 1.3f, centerY - hubRadius * 0.95f, centerX + hubRadius * 0.1f, centerY + hubRadius * 0.95f);
+        canvas.drawArc(side, -55f, 110f, false, seam);
+        RectF side2 = new RectF(centerX - hubRadius * 0.1f, centerY - hubRadius * 0.95f, centerX + hubRadius * 1.3f, centerY + hubRadius * 0.95f);
+        canvas.drawArc(side2, 125f, 110f, false, seam);
     }
 
     private void drawTennisCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
@@ -936,6 +1073,116 @@ public class PinGameView extends View {
         canvas.drawArc(oval, -85f, 170f, false, seam);
         RectF oval2 = new RectF(centerX - hubRadius * 0.15f, centerY - hubRadius * 0.72f, centerX + hubRadius * 0.95f, centerY + hubRadius * 0.72f);
         canvas.drawArc(oval2, 95f, 170f, false, seam);
+    }
+
+    private void drawBilliardCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint black = new Paint(Paint.ANTI_ALIAS_FLAG);
+        black.setColor(Color.rgb(20, 22, 25));
+        Paint white = new Paint(Paint.ANTI_ALIAS_FLAG);
+        white.setColor(Color.WHITE);
+        canvas.drawCircle(centerX, centerY, hubRadius, black);
+        canvas.drawCircle(centerX, centerY, hubRadius * 0.42f, white);
+    }
+
+    private void drawPlanetCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint planet = new Paint(Paint.ANTI_ALIAS_FLAG);
+        planet.setColor(Color.rgb(111, 101, 210));
+        Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ring.setColor(Color.argb(210, 238, 193, 96));
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(Math.max(1f, hubRadius * 0.16f));
+        RectF oval = new RectF(centerX - hubRadius * 1.38f, centerY - hubRadius * 0.48f, centerX + hubRadius * 1.38f, centerY + hubRadius * 0.48f);
+        canvas.drawArc(oval, 0f, 360f, false, ring);
+        canvas.drawCircle(centerX, centerY, hubRadius * 0.82f, planet);
+    }
+
+    private void drawShieldCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint shield = new Paint(Paint.ANTI_ALIAS_FLAG);
+        shield.setColor(Color.rgb(56, 122, 184));
+        Path path = new Path();
+        path.moveTo(centerX, centerY - hubRadius);
+        path.lineTo(centerX + hubRadius * 0.78f, centerY - hubRadius * 0.52f);
+        path.lineTo(centerX + hubRadius * 0.62f, centerY + hubRadius * 0.42f);
+        path.lineTo(centerX, centerY + hubRadius);
+        path.lineTo(centerX - hubRadius * 0.62f, centerY + hubRadius * 0.42f);
+        path.lineTo(centerX - hubRadius * 0.78f, centerY - hubRadius * 0.52f);
+        path.close();
+        canvas.drawPath(path, shield);
+    }
+
+    private void drawSmileCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint face = new Paint(Paint.ANTI_ALIAS_FLAG);
+        face.setColor(Color.rgb(247, 198, 62));
+        Paint detail = new Paint(Paint.ANTI_ALIAS_FLAG);
+        detail.setColor(Color.rgb(45, 45, 45));
+        detail.setStyle(Paint.Style.STROKE);
+        detail.setStrokeWidth(Math.max(1f, hubRadius * 0.08f));
+        canvas.drawCircle(centerX, centerY, hubRadius, face);
+        canvas.drawCircle(centerX - hubRadius * 0.34f, centerY - hubRadius * 0.18f, hubRadius * 0.08f, detail);
+        canvas.drawCircle(centerX + hubRadius * 0.34f, centerY - hubRadius * 0.18f, hubRadius * 0.08f, detail);
+        canvas.drawArc(new RectF(centerX - hubRadius * 0.45f, centerY - hubRadius * 0.1f, centerX + hubRadius * 0.45f, centerY + hubRadius * 0.52f), 25f, 130f, false, detail);
+    }
+
+    private void drawNeonCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint base = new Paint(Paint.ANTI_ALIAS_FLAG);
+        base.setColor(Color.rgb(18, 24, 40));
+        Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(Math.max(1f, hubRadius * 0.12f));
+        ring.setColor(Color.rgb(48, 226, 205));
+        canvas.drawCircle(centerX, centerY, hubRadius, base);
+        canvas.drawCircle(centerX, centerY, hubRadius * 0.66f, ring);
+        ring.setColor(Color.rgb(247, 83, 164));
+        canvas.drawCircle(centerX, centerY, hubRadius * 0.34f, ring);
+    }
+
+    private void drawClockCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint face = new Paint(Paint.ANTI_ALIAS_FLAG);
+        face.setColor(Color.rgb(245, 239, 218));
+        Paint detail = new Paint(Paint.ANTI_ALIAS_FLAG);
+        detail.setColor(Color.rgb(35, 45, 58));
+        detail.setStyle(Paint.Style.STROKE);
+        detail.setStrokeWidth(Math.max(1f, hubRadius * 0.07f));
+        canvas.drawCircle(centerX, centerY, hubRadius, face);
+        canvas.drawCircle(centerX, centerY, hubRadius * 0.78f, detail);
+        canvas.drawLine(centerX, centerY, centerX, centerY - hubRadius * 0.48f, detail);
+        canvas.drawLine(centerX, centerY, centerX + hubRadius * 0.36f, centerY + hubRadius * 0.2f, detail);
+    }
+
+    private void drawGemCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
+        Paint gem = new Paint(Paint.ANTI_ALIAS_FLAG);
+        gem.setColor(Color.rgb(70, 190, 224));
+        Path path = new Path();
+        path.moveTo(centerX, centerY - hubRadius);
+        path.lineTo(centerX + hubRadius * 0.86f, centerY - hubRadius * 0.18f);
+        path.lineTo(centerX + hubRadius * 0.52f, centerY + hubRadius * 0.86f);
+        path.lineTo(centerX - hubRadius * 0.52f, centerY + hubRadius * 0.86f);
+        path.lineTo(centerX - hubRadius * 0.86f, centerY - hubRadius * 0.18f);
+        path.close();
+        canvas.drawPath(path, gem);
+    }
+
+    private void drawPentagon(Canvas canvas, float centerX, float centerY, float radius, float rotation, Paint paint) {
+        Path path = new Path();
+        for (int i = 0; i < 5; i++) {
+            double angle = Math.toRadians(rotation + (i * 72f));
+            float x = centerX + (float) Math.cos(angle) * radius;
+            float y = centerY + (float) Math.sin(angle) * radius;
+            if (i == 0) {
+                path.moveTo(x, y);
+            } else {
+                path.lineTo(x, y);
+            }
+        }
+        path.close();
+        canvas.drawPath(path, paint);
+    }
+
+    private int getLevelTextColor(String coreId) {
+        return "soccer".equals(coreId) || "tennis".equals(coreId) || "baseball".equals(coreId)
+                || "smile".equals(coreId) || "clock".equals(coreId)
+                ? Color.BLACK
+                : Color.WHITE;
     }
 
     private void drawCustomImageCore(Canvas canvas, float centerX, float centerY, float hubRadius) {
@@ -1052,18 +1299,24 @@ public class PinGameView extends View {
         drawCenteredText(canvas, value, cx, cy + dp(10f), valuePaint);
     }
 
-    private void drawSkinCards(Canvas canvas, float left, float top, float width) {
+    private void drawSkinCards(Canvas canvas, float left, float top, float width, RectF clipRect) {
         skinRects.clear();
-        float cardGap = dp(10f);
+        float cardGap = dp(6f);
         float cardWidth = (width - cardGap) / 2f;
-        float cardHeight = dp(82f);
+        float cardHeight = dp(58f);
+        skinScrollY = clampSelectionScroll(skinScrollY, skins.size());
+        canvas.save();
+        canvas.clipRect(clipRect);
         for (int i = 0; i < skins.size(); i++) {
             SkinConfig skin = skins.get(i);
             int row = i / 2;
             int col = i % 2;
             float cardLeft = left + col * (cardWidth + cardGap);
-            float cardTop = top + row * (cardHeight + cardGap);
+            float cardTop = top + row * (cardHeight + cardGap) - skinScrollY;
             RectF rect = new RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight);
+            if (rect.bottom < clipRect.top || rect.top > clipRect.bottom) {
+                continue;
+            }
             skinRects.put(skin.id, rect);
 
             Paint fill = new Paint(chipPaint);
@@ -1075,14 +1328,14 @@ public class PinGameView extends View {
             canvas.drawRoundRect(rect, dp(18f), dp(18f), fill);
 
             canvas.save();
-            canvas.translate(rect.left + dp(34f), rect.centerY());
-            drawSkinHead(canvas, skin, 0f, 0f, 0f, dp(10f));
+            canvas.translate(rect.left + dp(28f), rect.centerY());
+            drawSkinHead(canvas, skin, 0f, 0f, 0f, dp(8f));
             canvas.restore();
 
             Paint namePaint = new Paint(titlePaint);
             namePaint.setTextSize(sp(14f));
             namePaint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(getSkinLabel(skin), rect.left + dp(58f), rect.top + dp(28f), namePaint);
+            canvas.drawText(getSkinLabel(skin), rect.left + dp(48f), rect.top + dp(22f), namePaint);
 
             Paint infoPaint = new Paint(bodyPaint);
             infoPaint.setTextAlign(Paint.Align.LEFT);
@@ -1093,8 +1346,9 @@ public class PinGameView extends View {
             } else {
                 state = skin.cost + " " + t("coins_short");
             }
-            canvas.drawText(state, rect.left + dp(58f), rect.top + dp(52f), infoPaint);
+            canvas.drawText(state, rect.left + dp(48f), rect.top + dp(43f), infoPaint);
         }
+        canvas.restore();
     }
 
     private void handleSkinTap(float x, float y) {
@@ -1120,27 +1374,33 @@ public class PinGameView extends View {
         }
     }
 
-    private void drawCoreCards(Canvas canvas, float left, float top, float width) {
+    private void drawCoreCards(Canvas canvas, float left, float top, float width, RectF clipRect) {
         coreRects.clear();
-        float cardGap = dp(10f);
+        float cardGap = dp(6f);
         float cardWidth = (width - cardGap) / 2f;
-        float cardHeight = dp(82f);
+        float cardHeight = dp(58f);
+        coreScrollY = clampSelectionScroll(coreScrollY, coreStyles.size());
+        canvas.save();
+        canvas.clipRect(clipRect);
         for (int i = 0; i < coreStyles.size(); i++) {
             CoreStyle core = coreStyles.get(i);
             int row = i / 2;
             int col = i % 2;
             float cardLeft = left + col * (cardWidth + cardGap);
-            float cardTop = top + row * (cardHeight + cardGap);
+            float cardTop = top + row * (cardHeight + cardGap) - coreScrollY;
             RectF rect = new RectF(cardLeft, cardTop, cardLeft + cardWidth, cardTop + cardHeight);
+            if (rect.bottom < clipRect.top || rect.top > clipRect.bottom) {
+                continue;
+            }
             coreRects.put(core.id, rect);
 
             Paint fill = new Paint(chipPaint);
             fill.setColor(core.id.equals(selectedCoreId) ? Color.argb(54, 196, 92, 67) : Color.argb(22, 0, 0, 0));
             canvas.drawRoundRect(rect, dp(18f), dp(18f), fill);
 
-            float cx = rect.left + dp(34f);
+            float cx = rect.left + dp(28f);
             float cy = rect.centerY();
-            float radius = dp(16f);
+            float radius = dp(13f);
             if ("custom".equals(core.id) && customTargetBitmap != null) {
                 drawCustomImageCore(canvas, cx, cy, radius);
             } else if ("soccer".equals(core.id)) {
@@ -1151,6 +1411,20 @@ public class PinGameView extends View {
                 drawTennisCore(canvas, cx, cy, radius);
             } else if ("baseball".equals(core.id)) {
                 drawBaseballCore(canvas, cx, cy, radius);
+            } else if ("billiard".equals(core.id)) {
+                drawBilliardCore(canvas, cx, cy, radius);
+            } else if ("planet".equals(core.id)) {
+                drawPlanetCore(canvas, cx, cy, radius);
+            } else if ("shield".equals(core.id)) {
+                drawShieldCore(canvas, cx, cy, radius);
+            } else if ("smile".equals(core.id)) {
+                drawSmileCore(canvas, cx, cy, radius);
+            } else if ("neon".equals(core.id)) {
+                drawNeonCore(canvas, cx, cy, radius);
+            } else if ("clock".equals(core.id)) {
+                drawClockCore(canvas, cx, cy, radius);
+            } else if ("gem".equals(core.id)) {
+                drawGemCore(canvas, cx, cy, radius);
             } else {
                 drawClassicCore(canvas, cx, cy, radius);
             }
@@ -1158,7 +1432,7 @@ public class PinGameView extends View {
             Paint namePaint = new Paint(titlePaint);
             namePaint.setTextSize(sp(14f));
             namePaint.setTextAlign(Paint.Align.LEFT);
-            canvas.drawText(getCoreLabel(core), rect.left + dp(60f), rect.top + dp(30f), namePaint);
+            canvas.drawText(getCoreLabel(core), rect.left + dp(48f), rect.top + dp(22f), namePaint);
 
             Paint infoPaint = new Paint(bodyPaint);
             infoPaint.setTextAlign(Paint.Align.LEFT);
@@ -1175,8 +1449,17 @@ public class PinGameView extends View {
                         ? (core.id.equals(selectedCoreId) ? t("selected") : t("tap_select"))
                         : core.cost + " " + t("coins_short");
             }
-            canvas.drawText(state, rect.left + dp(60f), rect.top + dp(56f), infoPaint);
+            canvas.drawText(state, rect.left + dp(48f), rect.top + dp(43f), infoPaint);
         }
+        canvas.restore();
+    }
+
+    private float clampSelectionScroll(float scrollY, int itemCount) {
+        int rows = (itemCount + 1) / 2;
+        float contentHeight = rows * dp(58f) + Math.max(0, rows - 1) * dp(6f);
+        float visibleHeight = getHeight() * 0.8f - dp(196f);
+        float maxScroll = Math.max(0f, contentHeight - Math.max(dp(160f), visibleHeight));
+        return Math.max(0f, Math.min(scrollY, maxScroll));
     }
 
     private void handleCoreTap(float x, float y) {
@@ -1561,9 +1844,16 @@ public class PinGameView extends View {
         List<SkinConfig> list = new ArrayList<>();
         list.add(new SkinConfig("needle", "Igne", 0));
         list.add(new SkinConfig("arrow", "Ok", 35));
-        list.add(new SkinConfig("sword", "Kilic", 80));
         list.add(new SkinConfig("dart", "Dart", 55));
+        list.add(new SkinConfig("laser", "Lazer", 65));
+        list.add(new SkinConfig("rocket", "Roket", 75));
+        list.add(new SkinConfig("sword", "Kilic", 80));
         list.add(new SkinConfig("spear", "Mizrak", 95));
+        list.add(new SkinConfig("pencil", "Kalem", 110));
+        list.add(new SkinConfig("lightning", "Simsek", 125));
+        list.add(new SkinConfig("nail", "Civi", 140));
+        list.add(new SkinConfig("feather", "Tuy", 155));
+        list.add(new SkinConfig("crystal", "Kristal", 175));
         return list;
     }
 
@@ -1575,6 +1865,13 @@ public class PinGameView extends View {
         list.add(new CoreStyle("basketball", 55));
         list.add(new CoreStyle("tennis", 70));
         list.add(new CoreStyle("baseball", 85));
+        list.add(new CoreStyle("billiard", 100));
+        list.add(new CoreStyle("planet", 115));
+        list.add(new CoreStyle("shield", 130));
+        list.add(new CoreStyle("smile", 145));
+        list.add(new CoreStyle("neon", 160));
+        list.add(new CoreStyle("clock", 175));
+        list.add(new CoreStyle("gem", 190));
         return list;
     }
 
@@ -1630,6 +1927,20 @@ public class PinGameView extends View {
                 return t("skin_dart");
             case "spear":
                 return t("skin_spear");
+            case "laser":
+                return t("skin_laser");
+            case "rocket":
+                return t("skin_rocket");
+            case "pencil":
+                return t("skin_pencil");
+            case "lightning":
+                return t("skin_lightning");
+            case "nail":
+                return t("skin_nail");
+            case "feather":
+                return t("skin_feather");
+            case "crystal":
+                return t("skin_crystal");
             default:
                 return t("skin_needle");
         }
@@ -1645,6 +1956,20 @@ public class PinGameView extends View {
                 return t("core_tennis");
             case "baseball":
                 return t("core_baseball");
+            case "billiard":
+                return t("core_billiard");
+            case "planet":
+                return t("core_planet");
+            case "shield":
+                return t("core_shield");
+            case "smile":
+                return t("core_smile");
+            case "neon":
+                return t("core_neon");
+            case "clock":
+                return t("core_clock");
+            case "gem":
+                return t("core_gem");
             case "custom":
                 return t("core_custom");
             default:
@@ -1768,6 +2093,20 @@ public class PinGameView extends View {
                 return en ? "Dart" : "Dart";
             case "skin_spear":
                 return en ? "Spear" : "Mizrak";
+            case "skin_laser":
+                return en ? "Laser" : "Lazer";
+            case "skin_rocket":
+                return en ? "Rocket" : "Roket";
+            case "skin_pencil":
+                return en ? "Pencil" : "Kalem";
+            case "skin_lightning":
+                return en ? "Lightning" : "Simsek";
+            case "skin_nail":
+                return en ? "Nail" : "Civi";
+            case "skin_feather":
+                return en ? "Feather" : "Tuy";
+            case "skin_crystal":
+                return en ? "Crystal" : "Kristal";
             case "core_classic":
                 return en ? "Classic" : "Klasik";
             case "core_soccer":
@@ -1778,6 +2117,20 @@ public class PinGameView extends View {
                 return en ? "Tennis Ball" : "Tenis Topu";
             case "core_baseball":
                 return en ? "Baseball" : "Beyzbol Topu";
+            case "core_billiard":
+                return en ? "Billiard 8" : "Bilardo 8";
+            case "core_planet":
+                return en ? "Planet" : "Gezegen";
+            case "core_shield":
+                return en ? "Shield" : "Kalkan";
+            case "core_smile":
+                return en ? "Smile" : "Gulen Yuz";
+            case "core_neon":
+                return en ? "Neon Disk" : "Neon Disk";
+            case "core_clock":
+                return en ? "Clock" : "Saat";
+            case "core_gem":
+                return en ? "Gem" : "Kristal";
             case "core_custom":
                 return en ? "Custom Photo" : "Ozel Resim";
             case "choose_photo":
